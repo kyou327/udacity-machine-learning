@@ -131,12 +131,20 @@ for k,v in data_dict.items():
 # The outlier is 'TOTAL'
 data_dict.pop(outlier_key)
 
-# Let's get rid of travel agency and steamrolling errors
+## Let's get rid of travel agency and steamrolling errors
+## added removal of Lockhart Eugene E for NaNs on second commit
 try:
     data_dict.pop('THE TRAVEL AGENCY IN THE PARK')
     print('Travel agency entry removed from dictionary')
 except:
     print('Travel agency not contained in dictionary')
+    print('But it was just there a minute ago?')
+    pass
+try:
+    data_dict.pop('LOCKHART EUGENE E')
+    print('LOCKHART EUGENE E removed from dictionary')
+except:
+    print('LOCKHART EUGENE E not contained in dictionary')
     print('But it was just there a minute ago?')
     pass
 
@@ -164,16 +172,10 @@ for key in data_dict:
         continue
     outliers.append((key,int(val)))
     
-### Sort the list of outliers and print the top 1 outlier in the list
-print ('Outliers in terms of salary: ')
-pprint(sorted(outliers,key=lambda x:x[1],reverse=True)[:1])
 
-### Remove the top 1 outlier: the total line
-#data_dict.pop('TOTAL', 0)
-
-### Sort the list of outliers and print the 3 outliers in the list
+### Sort the list of outliers and print the top 3 outliers in the list
 print ('Outliers in terms of salary: ')
-pprint(sorted(outliers,key=lambda x:x[1],reverse=True)[1:4])
+pprint(sorted(outliers,key=lambda x:x[1],reverse=True)[0:3])
 
 ### Visualise outliers by 2 dimension ploting
 ### lets see it again
@@ -243,148 +245,265 @@ my_dataset = df.T.to_dict()
 
 print(f'Number of features used: {len(all_features)}')
 
+
 ### Task 4: Try a variety of classifiers
 
-my_dataset = featureFormat(my_dataset, all_features, sort_keys = True)
+### Task 4: Try a variety of classifiers
+
+data = featureFormat(my_dataset, all_features, sort_keys = True)
 
 # features is x and labels is y
 # label_train, feature_train
-labels_i, features_i = targetFeatureSplit(my_dataset)
+labels, features = targetFeatureSplit(data)
 
-### Create function for univariate feature selection with SelectKBest
-def select_k_best(k):
-    select_k_best = SelectKBest(k=k)
-    select_k_best.fit(features_i, labels_i)
-    scores = select_k_best.scores_
-    unsorted_pairs = zip(all_features[1:], scores)
-    k_best_features = dict(list(reversed(sorted(unsorted_pairs, key=lambda x: x[1])))[:k])
-    return poi_label + list(k_best_features.keys())
+f_values = f_classif(features, labels)
 
-### Create function to print out the features and scores by given K value
-def k_best_features_score(k):
-    select_k_best = SelectKBest(k=k)
-    select_k_best.fit(features_i, labels_i)
-    scores = select_k_best.scores_
-    unsorted_pairs = zip(all_features[1:], scores)
-    k_best_features = dict(list(reversed(sorted(unsorted_pairs, key=lambda x: x[1])))[:k])
-    print (k_best_features)
+significant_count = 0
+significant_idx = []
+print('P-values:')
+for i in range(f_values[0].shape[0]):
+    if f_values[1][i] < .05:
+        significant_count += 1
+        significant_idx.append((i, f_values[1][i]))
+#print(f'Significant Features: {str(significant_idx).replace("[","").replace("]","")} ')
+print(f'There are {significant_count} significant features')
+print('I will use these 17 most significant features in my analysis')
+
+significant_idx_sorted = sorted(significant_idx, key=lambda tup: tup[1])
+
+for i in significant_idx_sorted:
+    print(f'{df.columns.to_list()[i[0]]} p-value: {i[1]}')
     
-### Print all features and scores with SelectKBest
-print ('All features and scores:')
-k_best_features_score((len(all_features)-1))
+# To increase f1 of my models, I will only use the k(17) best features from here out
+selector = SelectKBest(f_classif, k = 17)
+selector.fit_transform(features, labels)
+scores = sorted(zip(all_features[1:], selector.scores_), key = lambda x: x[1], reverse=True)
+best_features = list(map(lambda x: x[0], scores))[0:14]
+best_features_list = poi_label + best_features
 
-### Gaussian Naive Bayes
-nb_clf = GaussianNB()
-### SVC
-svc_clf=SVC(probability=False)
-### KNN
+#use the best features as chosen by SelectKbest
+data = featureFormat(my_dataset, best_features_list)
+
+labels, features = targetFeatureSplit(data)
+
+features_train, features_test, labels_train, labels_test = \
+    train_test_split(features, labels, random_state=42)
+    
+sss = StratifiedShuffleSplit(n_splits= 100, test_size= 0.3, random_state= 42)
+sss.get_n_splits(features, labels)
+
+### here's where we actually try the variety of classifiers
+
+#gaussian NB
+g_clf = GaussianNB()
+g_clf.fit(features_train, labels_train)
+g_pred = g_clf.predict(features_test)
+
+print("############################################")
+print("Precision score_Gaussian is:", precision_score(labels_test, g_pred, average = 'macro', zero_division = 0))
+print("Recall score_Gaussian is: ", recall_score(labels_test, g_pred, average = 'macro', zero_division = 0))
+
+#Decision Tree
+dt_clf = DecisionTreeClassifier(random_state=42)
+dt_clf.fit(features_train, labels_train)
+dt_pred = dt_clf.predict(features_test)
+
+print("############################################")
+print("Precision score_DecisionTree is:", precision_score(labels_test, dt_pred, average = 'macro', zero_division = 0))
+print("Recall score_DecisionTree is: ", recall_score(labels_test, dt_pred, average = 'macro', zero_division = 0))
+
+#Kneighbors
 knn_clf = KNeighborsClassifier()
-### Decision tree
-dt_clf = DecisionTreeClassifier() 
-### LogisticRegression
-## didnt use, too many errors
-#l_clf = LogisticRegression(penalty='l2')
+knn_clf.fit(features_train, labels_train)
+knn_pred = knn_clf.predict(features_test)
+
+print("############################################")
+print("Precision score_KNN is:", precision_score(labels_test, knn_pred, average = 'macro', zero_division = 0))
+print("Recall score_KNN is: ", recall_score(labels_test, knn_pred, average = 'macro', zero_division = 0))
+
+#SVC
+svc_clf = SVC(probability=False)
+svc_clf.fit(features_train, labels_train)
+svc_pred = svc_clf.predict(features_test)
+
+print("############################################")
+print("Precision score_SVC is:", precision_score(labels_test, svc_pred, average = 'macro', zero_division = 0))
+print("Recall score_SVC is: ", recall_score(labels_test, svc_pred, average = 'macro', zero_division = 0))
+
+#adaboost
+ada_clf = AdaBoostClassifier(random_state=42)
+ada_clf.fit(features_train, labels_train)
+ada_pred = ada_clf.predict(features_test)
+
+print("############################################")
+print("Precision score_ADA is:", precision_score(labels_test, ada_pred, average = 'macro', zero_division = 0))
+print("Recall score_ADA is: ", recall_score(labels_test, ada_pred, average = 'macro', zero_division = 0))
+
+ada_clf.get_params().keys()
+
+##Attempting tuning with scaling. using pipelines, applying MinMaxScaler() and PCA.
+
+sss = StratifiedShuffleSplit(n_splits= 100, test_size= 0.3, random_state= 42)
+scoring = 'f1'
+skb = SelectKBest(f_classif)
+
+scaler = MinMaxScaler()
+pca = PCA()
+
+g_clf = GaussianNB()    # Provided to give you a starting point. Try a varity of classifiers.
+
+g_pipe = Pipeline(steps=[('scaler', scaler), ('pca', pca),('skb', skb), ('gaussian', g_clf)])
+
+g_params = dict(pca__n_components=[4,5,6,7,8,9,10],
+                    skb__k = [1,2,3,4])
+
+g_gs = GridSearchCV(g_clf, {}, cv = sss, scoring = scoring)
+
+# Output
+
+g_gs.fit(features, labels)
+print("####################")
+print("Best estimator:")
+print(g_gs.best_estimator_)
+print("Best score:")
+print(g_gs.best_score_)
+print("Best parameters:")
+print(g_gs.best_params_)
+
+g_clf = g_gs.best_estimator_
+g_clf.fit(features_train, labels_train)
+
+g_pred = g_clf.predict(features_test)
+
+print("Precision score:")
+print(precision_score(labels_test, g_pred, average = 'macro', zero_division = 0))
+print("Recall score:")
+print(recall_score(labels_test, g_pred, average = 'macro', zero_division = 0))
+print("#####################")
+print(' ')
+
+gt_gs = GridSearchCV(g_pipe, g_params, cv = sss, scoring = scoring)
+
+# Output
+
+gt_gs.fit(features, labels)
+print("####################")
+print("Best estimator:")
+print(gt_gs.best_estimator_)
+print("Best score:")
+print(gt_gs.best_score_)
+print("Best parameters:")
+print(gt_gs.best_params_)
+
+gt_clf = gt_gs.best_estimator_
+gt_clf.fit(features_train, labels_train)
+
+gt_pred = gt_clf.predict(features_test)
+
+print("Precision score:")
+print(precision_score(labels_test, gt_pred, average = 'macro', zero_division = 0))
+print("Recall score:")
+print(recall_score(labels_test, gt_pred, average = 'macro', zero_division = 0))
+print("#####################")
+print(' ')
+
+dt_clf = DecisionTreeClassifier(random_state=42)
+#('pca', pca)
+dt_pipe = Pipeline([('DecisionTree', dt_clf)])
+
+dt_params = {
+ 'dt__splitter': ['best', 'random'],
+ 'dt__min_samples_split': [2, 3, 4, 5, 6, 7],
+ 'dt__max_features': labels
+ }
+
+dt_gs = GridSearchCV(dt_clf, {}, cv = sss, scoring = scoring)
+
+# Output
+
+dt_gs.fit(features, labels)
+print("####################")
+print("Best estimator:")
+print(dt_gs.best_estimator_)
+print("Best score:")
+print(dt_gs.best_score_)
+print("Best parameters:")
+print(dt_gs.best_params_)
+
+dt_clf = dt_gs.best_estimator_
+dt_clf.fit(features_train, labels_train)
+
+dt_pred = dt_clf.predict(features_test)
+
+print("Precision score:")
+print(precision_score(labels_test, dt_pred, average = 'macro', zero_division = 0))
+print("Recall score:")
+print(recall_score(labels_test, dt_pred, average = 'macro', zero_division = 0))
+print("#####################")
+print(' ')
+
+ada_clf = AdaBoostClassifier()
+
+ada_pipe = Pipeline([('AdaBoost', ada_clf)])
+
+ada_params = {'n_estimators': [100], 
+'algorithm': ['SAMME', 'SAMME.R'], 
+'learning_rate': [.2, .5, 1, 1.4, 2], 
+'random_state': [42]
+}
+
+ada_gs = GridSearchCV(ada_clf, {}, cv = sss, scoring = scoring)
+
+# Output
+
+ada_gs.fit(features, labels)
+print("####################")
+print("Best estimator:")
+print(ada_gs.best_estimator_)
+print("Best score:")
+print(ada_gs.best_score_)
+print("Best parameters:")
+print(ada_gs.best_params_)
+
+ada_clf = ada_gs.best_estimator_
+ada_clf.fit(features_train, labels_train)
+
+ada_pred = ada_clf.predict(features_test)
+
+print("Precision score:")
+print(precision_score(labels_test, ada_pred, average = 'macro', zero_division = 0))
+print("Recall score:")
+print(recall_score(labels_test, ada_pred, average = 'macro', zero_division = 0))
+print("#####################")
+print(' ')
+
+adat_gs = GridSearchCV(ada_pipe, ada_params, cv = sss, scoring = scoring, refit=True)
+
+# Output
+
+adat_gs.fit(features, labels)
+print("####################")
+print("Best estimator:")
+print(adat_gs.best_estimator_)
+print("Best score:")
+print(adat_gs.best_score_)
+print("Best parameters:")
+print(adat_gs.best_params_)
+
+adat_clf = adat_gs.best_estimator_
+adat_clf.fit(features_train, labels_train)
+
+adat_pred = adat_clf.predict(features_test)
+
+print("Precision score:")
+print(precision_score(labels_test, adat_pred, average = 'macro', zero_division = 0))
+print("Recall score:")
+print(recall_score(labels_test, adat_pred, average = 'macro', zero_division = 0))
+print("#####################")
+print(' ')
 
 
-### Evaluation metrics: Accuracy, precision, recall, f1
-def evaluation(features, labels, clf, name):
-    cv = StratifiedShuffleSplit(n_splits=10, test_size=0.3, random_state=42)
-    accuracy = []
-    precision = []
-    recall = []
-    f1 = []
-    for train_index, test_index in cv.split(features,labels):
-        features_train = [features[ii] for ii in train_index]
-        features_test = [features[ii] for ii in test_index]
-        labels_train = [labels[ii] for ii in train_index]
-        labels_test = [labels[ii] for ii in test_index]
-        clf.fit(features_train, labels_train)
-        labels_pred = clf.predict(features_test)
-        accuracy.append(round(accuracy_score(labels_test, labels_pred),2))
-        precision.append(round(precision_score(labels_test, labels_pred, zero_division=1),2))
-        recall.append(round(recall_score(labels_test, labels_pred),2))
-        f1.append(f1_score(labels_test, labels_pred))
-    print (name)
-    print ('Mean of accuracy: {0}'.format(np.mean(accuracy)))
-    print ('Mean of precision: {0}'.format(np.mean(precision)))
-    print ('Mean of recall: {0}'.format(np.mean(recall)))
-    print ('Mean of f1 score: {0}'.format(np.mean(f1)))
-    
-    
-### Function: GridSearchCV to tune parameters
-def find_best_params(clf, features, labels, param_grid):
-    grid = GridSearchCV(clf, param_grid, cv=10)
-    grid.fit(features, labels)
-    return grid
-
-
-### Input Parameter Grid for KNN
-k_range = list(range(1,11))
-algorithm_options = ['ball_tree','kd_tree','brute','auto']
-param_grid_knn = dict(n_neighbors=k_range, algorithm=algorithm_options)
-
-### Input: Parameter Grid for SVC
-param_grid_svc = [
-  {'C': [1, 10, 50, 100, 150, 1000], 'kernel': ['linear','rbf']},
-  {'C': [1, 10, 50, 100, 150, 1000], 'gamma': [0.1, 0.01, 0.001, 0.0001], 'kernel': ['linear','rbf']}]
-
-### Input Parameter Grid for Decision Tree Classifier
-param_grid_dt = {"criterion": ["gini", "entropy"],
-              "min_samples_split": [2, 10, 20],
-              "max_depth": [None, 2, 5, 10],
-              "min_samples_leaf": [1, 5, 10],
-              "max_leaf_nodes": [None, 5, 10, 20],
-              }
-
-### Input Parameter Grid for LogisticRegression Classfier
-### decided not to use, too many errors
-#param_grid_l = {'C': [0.001, 0.01, 0.1, 1, 10, 100, 1000]}
-
-
-### Function to try different k value selected by SelectKBest
-###run thru the classifiers to see what outputs best
-def training_model(k):
-    print ('k = {0}'.format(k))
-    best_features = select_k_best(k)
-    print(best_features)
-    ### Save data_dict to my_dataset
-    my_dataset = data_dict
-
-    ### Extract features and labels from dataset
-    my_dataset = featureFormat(my_dataset, best_features)
-    labels, features = targetFeatureSplit(my_dataset)
-
-    ### Scale features 
-    features = MinMaxScaler().fit_transform(features)
-
-    ### Find best params 
-    knn_tune = find_best_params(knn_clf, features, labels, param_grid_knn)
-    svc_tune = find_best_params(svc_clf, features, labels, param_grid_svc)
-    dt_tune = find_best_params(dt_clf, features, labels, param_grid_dt)
-    #l_tune = find_best_params(l_clf, features, labels, param_grid_l)
-
-    ### Evaluation
-    evaluation(features, labels, nb_clf, 'Naive Bayes Classifier (without Tuning)')
-    evaluation(features, labels, knn_clf, 'K Nearest Neighbors Classifier (without Tuning)')
-    evaluation(features, labels, knn_tune, 'K Nearest Neighbors Classifier (with Tuning)')
-    evaluation(features, labels, svc_clf, 'SVC Classifier (without Tuning)')
-    evaluation(features, labels, svc_tune, 'SVC Classifier (with Tuning)')
-    evaluation(features, labels, dt_clf, 'Decision Tree Classifier (without Tuning)')
-    evaluation(features, labels, dt_tune, 'Decision Tree Classifier (with Tuning)')
-    #evaluation(features, labels, l_clf, 'Logistic Regression Classifier (without Tuning)')
-    #evaluation(features, labels, l_tune, 'Logistic Regression Classifier (with Tuning)')
-    
-    
-### Try different k to find out the best number of features
-k_best = list(range(3,5))
-for k in k_best:
-    training_model(k)
-    
-### With k = 3, KNN classfier shows the best performance.
-### Print out the best features and scores
-print ('Best features selected and Scores:')
-k_best_features_score(3)
-
+test_classifier(ada_clf, my_dataset, best_features_list)
 
 ### Task 6: Dump your classifier, dataset, and features_list so anyone can
 ### check your results. You do not need to change anything below, but make sure
@@ -392,7 +511,7 @@ k_best_features_score(3)
 ### generates the necessary .pkl files for validating your results.
 
 ### Save the best performing classifier as clf for export
-clf = knn_clf
+clf = nb_clf
 
 ### Save best features as features_list for export
 features_list = select_k_best(4)
