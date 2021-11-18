@@ -10,7 +10,7 @@ import numpy as np
 #sys.path.append("../tools/")
 import feature_format
 from feature_format import featureFormat, targetFeatureSplit
-from tester import test_classifier, dump_classifier_and_data
+from tester import test_classifier, load_classifier_and_data, dump_classifier_and_data
 from pprint import pprint
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import *
@@ -19,10 +19,14 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
+from sklearn.ensemble import AdaBoostClassifier
 from sklearn.feature_selection import f_classif, SelectKBest, VarianceThreshold
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, precision_score, recall_score, classification_report, confusion_matrix
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import StratifiedShuffleSplit
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.decomposition import PCA
 import pandas as pd
 
 ### Load the dictionary containing the dataset
@@ -57,7 +61,7 @@ for k,v in data_dict.items():
         if i not in total_dataset_features:
             total_dataset_features.append(i)
 
-# What's python code without overused prints?
+
 print(f'There are {len(total_dataset_features)} unique columns in the data dictionary')
 print(f'There are {len(all_features)} total features in my list')
 
@@ -229,14 +233,11 @@ df = pd.DataFrame.from_dict(my_dataset).T
 df = df.apply(pd.to_numeric, errors='coerce')
 df['poi'] = df['poi'].astype('int')
 df.drop('email_address', axis=1, inplace=True)
+df.drop('director_fees', axis=1, inplace=True)
+df.drop('restricted_stock_deferred', axis=1, inplace=True)
+df.drop('loan_advances', axis=1, inplace=True)
 
-for i in features_to_remove:
-    try:
-        df.drop(i, axis=1, inplace=True)
-        all_features.remove(i)
-    except:
-        pass
-    
+   
 df.fillna(0, axis=1, inplace=True)
 #for i in df:
 #    df.fillna(value=df[i].mean(), axis=1, inplace=True)
@@ -244,9 +245,9 @@ all_features = [x for x in df.columns]
 my_dataset = df.T.to_dict()
 
 print(f'Number of features used: {len(all_features)}')
+print(all_features)
 
 
-### Task 4: Try a variety of classifiers
 
 ### Task 4: Try a variety of classifiers
 
@@ -339,7 +340,7 @@ print("############################################")
 print("Precision score_ADA is:", precision_score(labels_test, ada_pred, average = 'macro', zero_division = 0))
 print("Recall score_ADA is: ", recall_score(labels_test, ada_pred, average = 'macro', zero_division = 0))
 
-ada_clf.get_params().keys()
+
 
 ##Attempting tuning with scaling. using pipelines, applying MinMaxScaler() and PCA.
 
@@ -350,12 +351,12 @@ skb = SelectKBest(f_classif)
 scaler = MinMaxScaler()
 pca = PCA()
 
-g_clf = GaussianNB()    # Provided to give you a starting point. Try a varity of classifiers.
+g_clf = GaussianNB()    
 
 g_pipe = Pipeline(steps=[('scaler', scaler), ('pca', pca),('skb', skb), ('gaussian', g_clf)])
 
 g_params = dict(pca__n_components=[4,5,6,7,8,9,10],
-                    skb__k = [1,2,3,4])
+                    skb__k = [1,2,3,4]))
 
 g_gs = GridSearchCV(g_clf, {}, cv = sss, scoring = scoring)
 
@@ -477,49 +478,175 @@ print(recall_score(labels_test, ada_pred, average = 'macro', zero_division = 0))
 print("#####################")
 print(' ')
 
-adat_gs = GridSearchCV(ada_pipe, ada_params, cv = sss, scoring = scoring, refit=True)
+###Evaluate and Validate
 
-# Output
+### Evaluation metrics: Accuracy, precision, recall, f1
+def evaluation(features, labels, clf, name):
+    cv = StratifiedShuffleSplit(n_splits=10, test_size=0.3, random_state=42)
+    accuracy = []
+    precision = []
+    recall = []
+    f1 = []
+    for train_index, test_index in cv.split(features,labels):
+        features_train = [features[ii] for ii in train_index]
+        features_test = [features[ii] for ii in test_index]
+        labels_train = [labels[ii] for ii in train_index]
+        labels_test = [labels[ii] for ii in test_index]
+        clf.fit(features_train, labels_train)
+        labels_pred = clf.predict(features_test)
+        accuracy.append(round(accuracy_score(labels_test, labels_pred),2))
+        precision.append(round(precision_score(labels_test, labels_pred, zero_division=0),2))
+        recall.append(round(recall_score(labels_test, labels_pred),2))
+        f1.append(f1_score(labels_test, labels_pred))
+    print (name)
+    print ('Mean of accuracy: {0}'.format(np.mean(accuracy)))
+    print ('Mean of precision: {0}'.format(np.mean(precision)))
+    print ('Mean of recall: {0}'.format(np.mean(recall)))
+    print ('Mean of f1 score: {0}'.format(np.mean(f1)))
 
-adat_gs.fit(features, labels)
-print("####################")
-print("Best estimator:")
-print(adat_gs.best_estimator_)
-print("Best score:")
-print(adat_gs.best_score_)
-print("Best parameters:")
-print(adat_gs.best_params_)
+### Function: GridSearchCV to tune parameters
+## added cross_val to cv to use SSS for cv parameter (second commit)
+def find_best_params(clf, features, labels, param_grid):
+    sss = StratifiedShuffleSplit(n_splits = 10, random_state=42)
+    grid = GridSearchCV(clf, param_grid, cv = sss)
+    grid.fit(features, labels)
+    return grid
 
-adat_clf = adat_gs.best_estimator_
-adat_clf.fit(features_train, labels_train)
+### Find best params 
 
-adat_pred = adat_clf.predict(features_test)
+gt_clf = find_best_params(g_pipe, features, labels, g_params)
 
-print("Precision score:")
-print(precision_score(labels_test, adat_pred, average = 'macro', zero_division = 0))
-print("Recall score:")
-print(recall_score(labels_test, adat_pred, average = 'macro', zero_division = 0))
-print("#####################")
-print(' ')
-
-
-test_classifier(ada_clf, my_dataset, best_features_list)
+### Evaluation
+evaluation(features, labels, g_clf, 'Naive Bayes Classifier (without Tuning)')
+evaluation(features, labels, gt_clf, 'Naive Bayes Classifier (with Tuning)')
+evaluation(features, labels, knn_clf, 'K Nearest Neighbors Classifier (without Tuning)')
+evaluation(features, labels, svc_clf, 'SVC Classifier (without Tuning)')
+evaluation(features, labels, dt_clf, 'Decision Tree Classifier (without Tuning)')
+evaluation(features, labels, ada_clf, 'AdaBoost Classifier (without Tuning)')
 
 ### Task 6: Dump your classifier, dataset, and features_list so anyone can
 ### check your results. You do not need to change anything below, but make sure
 ### that the version of poi_id.py that you submit can be run on its own and
 ### generates the necessary .pkl files for validating your results.
 
+###best result was with Adaboost untuned
 ### Save the best performing classifier as clf for export
-clf = nb_clf
+clf = ada_clf
 
 ### Save best features as features_list for export
-features_list = select_k_best(4)
+feature_list = best_features_list
 
 ### Save to my_dataset for export
-my_dataset = data_dict
+my_dataset = my_dataset
 
-dump_classifier_and_data(clf, my_dataset, features_list)
+dump_classifier_and_data(clf, my_dataset, feature_list)
 
 
+
+import pickle
+import sys
+from sklearn.model_selection import StratifiedShuffleSplit
+sys.path.append("../tools/")
+from feature_format import featureFormat, targetFeatureSplit
+
+PERF_FORMAT_STRING = "\
+\tAccuracy: {:>0.{display_precision}f}\tPrecision: {:>0.{display_precision}f}\t\
+Recall: {:>0.{display_precision}f}\tF1: {:>0.{display_precision}f}\tF2: {:>0.{display_precision}f}"
+RESULTS_FORMAT_STRING = "\tTotal predictions: {:4d}\tTrue positives: {:4d}\tFalse positives: {:4d}\
+\tFalse negatives: {:4d}\tTrue negatives: {:4d}"
+
+def test_classifier(clf, dataset, feature_list, folds = 1000):
+    data = featureFormat(dataset, feature_list, sort_keys = True)
+    labels, features = targetFeatureSplit(data)
+    cv = StratifiedShuffleSplit(n_splits=folds, random_state=42)
+    true_negatives = 0
+    false_negatives = 0
+    true_positives = 0
+    false_positives = 0
+    for train_idx, test_idx in cv.split(features, labels): 
+        features_train = []
+        features_test  = []
+        labels_train   = []
+        labels_test    = []
+        for ii in train_idx:
+            features_train.append( features[ii] )
+            labels_train.append( labels[ii] )
+        for jj in test_idx:
+            features_test.append( features[jj] )
+            labels_test.append( labels[jj] )
+        
+        ### fit the classifier using training set, and test on test set
+        clf.fit(features_train, labels_train)
+        predictions = clf.predict(features_test)
+        for prediction, truth in zip(predictions, labels_test):
+            if prediction == 0 and truth == 0:
+                true_negatives += 1
+            elif prediction == 0 and truth == 1:
+                false_negatives += 1
+            elif prediction == 1 and truth == 0:
+                false_positives += 1
+            elif prediction == 1 and truth == 1:
+                true_positives += 1
+            else:
+                print ("Warning: Found a predicted label not == 0 or 1.")
+                print ("All predictions should take value 0 or 1.")
+                print ("Evaluating performance for processed predictions:")
+                break
+    try:
+        total_predictions = true_negatives + false_negatives + false_positives + true_positives
+        accuracy = 1.0*(true_positives + true_negatives)/total_predictions
+        precision = 1.0*true_positives/(true_positives+false_positives)
+        recall = 1.0*true_positives/(true_positives+false_negatives)
+        f1 = 2.0 * true_positives/(2*true_positives + false_positives+false_negatives)
+        f2 = (1+2.0*2.0) * precision*recall/(4*precision + recall)
+        print (clf)
+        print (PERF_FORMAT_STRING.format(accuracy, precision, recall, f1, f2, display_precision = 5))
+        print (RESULTS_FORMAT_STRING.format(total_predictions, true_positives, false_positives, false_negatives, true_negatives))
+        print ("")
+    except:
+        print ("Got a divide by zero when trying out:", clf)
+        print ("Precision or recall may be undefined due to a lack of true positive predictions.")
+
+CLF_PICKLE_FILENAME = "my_classifier.pkl"
+DATASET_PICKLE_FILENAME = "my_dataset.pkl"
+FEATURE_LIST_FILENAME = "my_feature_list.pkl"
+
+def dump_classifier_and_data(clf, dataset, feature_list):
+    with open(CLF_PICKLE_FILENAME, "wb") as clf_outfile:
+        pickle.dump(clf, clf_outfile)
+    with open(DATASET_PICKLE_FILENAME, "wb") as dataset_outfile:
+        pickle.dump(dataset, dataset_outfile)
+    with open(FEATURE_LIST_FILENAME, "wb") as featurelist_outfile:
+        pickle.dump(feature_list, featurelist_outfile)
+
+def load_classifier_and_data():
+    with open(CLF_PICKLE_FILENAME, "rb") as clf_infile:
+        clf = pickle.load(clf_infile)
+    with open(DATASET_PICKLE_FILENAME, "rb") as dataset_infile:
+        dataset = pickle.load(dataset_infile)
+    with open(FEATURE_LIST_FILENAME, "rb") as featurelist_infile:
+        feature_list = pickle.load(featurelist_infile)
+    return clf, dataset, feature_list
+
+def main():
+    ### load up student's classifier, dataset, and feature_list
+    clf, dataset, feature_list = load_classifier_and_data()
+    ### Run testing script
+    test_classifier(clf, dataset, feature_list)
+
+if __name__ == '__main__':
+    main()
+
+### Most recent results
+#AdaBoostClassifier()
+#Accuracy: 0.78944
+#Precision: 0.53813
+#Recall: 0.37050
+#F1: 0.43885
+#F2: 0.39512
+#Total predictions: 9000
+#True positives:  741
+#False positives:  636
+#False negatives: 1259
+#True negatives: 6364
 
