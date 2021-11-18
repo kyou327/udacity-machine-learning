@@ -91,9 +91,9 @@ the project deploys univariate feature selection to select the k best features:
 1. Create function with **SelectKBest** to select the k best features
 1. Use **GridSearchCV** to select the best parameters
 1. Set the parameters of the selected machine learning algorithms with the best parameters and evaluate the performance of the algorithms
-1. Repeat the above process for k ranged from 3 to 10*. Based on the Recall, select the best K value.
+1. Repeat the above process for k ranged from 3 to 22. Based on the Recall, select the best K value.
 
-*as a note, the various classifiers resulted in massive overfitting beyond a range of 5, as well as regression issues. The final build was most successful using NB, KNN, and SVC with a range of 3 to 5.
+
 
 | Feature | Score |
 |:------- | -----:|
@@ -172,6 +172,7 @@ param_grid_dt = {
 
 After parameter tuning, there were slight gains in **Naive Bayes classifier**, but these turned out to be overfitting issues which resulted in matching precision and recall scores.
 
+
 ## Question 5: 
 > What is validation, and what’s a classic mistake you can make if you do it wrong? How did you validate your analysis? [relevant rubric items: “discuss validation”, “validation strategy”]
 
@@ -204,7 +205,7 @@ To sum up the evaluation strategy:
 1. Algorithms with a precision_score and recall_score (and to a lesser degree, f1_score) greater than 0.3 are selected.
 1. The higher the recall is, the better the performance of the algorithm is.
 
-With the 3 best features selected, Adaboost showed the best performance upon testing with tester.py:
+With the 3 best features selected, **Adaboost Classifier** showed the best performance upon testing with tester.py:
 
 1. Accuracy = 0.789: 78.9% of the 146 data points are correctly predicted
 1. Precision: 0.538: Among the identified Persons of Interest, 53.8% are true POI.
