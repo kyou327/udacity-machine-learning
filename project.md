@@ -91,17 +91,16 @@ the project deploys univariate feature selection to select the k best features:
 1. Create function with **SelectKBest** to select the k best features
 1. Use **GridSearchCV** to select the best parameters
 1. Set the parameters of the selected machine learning algorithms with the best parameters and evaluate the performance of the algorithms
-1. Repeat the above process for k ranged from 3 to 10*. Based on the Recall, select the best K value.
+1. Repeat the above process for k ranged from 3 to 22. Based on the Recall, select the best K value.
 
-*as a note, the various classifiers resulted in massive overfitting beyond a range of 5, as well as regression issues. The final build was most successful using NB, KNN, and SVC with a range of 3 to 5.
 
-With the above process, **k = 3** turned out to be the best K value!
 
 | Feature | Score |
 |:------- | -----:|
 |'other' | 957.2535461876616 |
 |'from_this_person_to_poi' | 369.7532172430564 |
 |'bonus' | 106.48203651244525 | 
+|'deferred_income' | 98.80556031148178 |
 
 Some of the classifiers were tuned with MinMaxScaler in order to moderate the ranges between different features. Some, like 'salary' have very high number ranges in the millions, and some like 'from_this_person_to_poi' have less than 1000.
 
@@ -109,8 +108,8 @@ Some of the classifiers were tuned with MinMaxScaler in order to moderate the ra
 ## Question 3:
 > What algorithm did you end up using? What other one(s) did you try? How did model performance differ between algorithms? [relevant rubric item: “pick an algorithm”]
 
-**Naive bayes**, **support vector classifier**, **K nearest neighbors**, **decision tree** and **logistic regression** were tested with the selected k_best_features (k_range from 3 to 10). As evaluation strategy the accuracy_score, precision_score, recall_score and f1_score will be calculated.
-Because the classifiers heavily suffered from overfitting in the dataset, the range had to be reduced. K=4 was the limit, as K=5 resulted in overfitting errors, float errors, and zero division errors. 
+**Naive bayes**, **support vector classifier**, **K nearest neighbors**, **decision tree** and **adaboost** were tested with the selected k_best_features. Select K Best settled on 17 ideal features to evaluate. For evaluation strategy the accuracy_score, precision_score, recall_score and f1_score will be calculated.
+
 
 To decide which algorithm works better, the project will mainly focus on precision and recall. The precision and recall which are greater than 0.3 will also be considered as good performance. The accuracy_score here is not a strong index for the performance, due to that there is only small percent of person of interest in the dataset. 
 
@@ -122,57 +121,45 @@ The evaluation strategy:
 
 |Top Algorithm|
 |-------------|
-|K Nearest Neighbors Classifier (without Tuning) |
-|K = 3 |
-|Mean of accuracy: 0.8360000000000001 |
-|Mean of precision: 0.695 |
-|Mean of recall: 0.42000000000000004 |
-|Mean of f1 score: 0.4961904761904762 |
-
-|K Nearest Neighbors Classifier (with Tuning) |
-|K = 3 |
-|Mean of accuracy: 0.8440000000000001 |
-|Mean of precision: 0.7070000000000001 |
-|Mean of recall: 0.36 |
-|Mean of f1 score: 0.43809523809523815 |
+|Adaboost Classifier (without Tuning) |
+|Accuracy: 0.789 |
+|Precision: 0.538 |
+|Recall: 0.37 |
+|F1 score: 0.438 |
 
 |Decision Tree Classifier (without Tuning) |
-|K = 4 |
-|Mean of accuracy: 0.752 |
-|Mean of precision: 0.369 |
-|Mean of recall: 0.32000000000000006 |
-|Mean of f1 score: 0.32911921411921413 |
+|Accuracy: 0.696 |
+|Precision: 0.269 |
+|Recall: 0.213 |
+|F1 score: 0.238 |
 
-|Naive Bayes Classifier (without Tuning) |
-|K = 4 |
-|Mean of accuracy: 0.804 |
-|Mean of precision: 0.538 |
-|Mean of recall: 0.30000000000000004 |
-|Mean of f1 score: 0.37873015873015875 |
+|Gaussian Naive Bayes Classifier (with Tuning) |
+|Accuracy: 0.775|
+|Precision: 0.488 |
+|Recall: 0.198 |
+|F1 score: 0.281 |
+
+
+
+
 
 ## Question 4:
 > What does it mean to tune the parameters of an algorithm, and what can happen if you don’t do this well?  How did you tune the parameters of your particular algorithm? What parameters did you tune? (Some algorithms do not have parameters that you need to tune -- if this is the case for the one you picked, identify and briefly explain how you would have done it for the model that was not your final choice or a different model that does utilize parameter tuning, e.g. a decision tree classifier).  [relevant rubric items: “discuss parameter tuning”, “tune the algorithm”]
 
-**Hyperparameter tuning** selects a set of optimal hyperparameters for machine learning algorithms. It can help to avoid overfitting and increase the performance of the algorithms on an independent dataset (Source: Wikipedia): 
+**Hyperparameter tuning** selects a set of optimal hyperparameters for machine learning algorithms. It can help to avoid overfitting and increase the performance of the algorithms on an independent dataset (Source: Wikipedia). 
 
-- For **K nearest neighbor classifier**, **GridSearchCV** searches through different combination of **algorithms** and **n_neighbors**.
-- For **SVC**, **GridSearchCV** tries different value for **C** and **gamma** to avoid overfitting.
-- For **decision tree classifier**, the **GridSearchCV** can try different value for **criterion**. Moreover, overfitting can be avoided for example by searching through different **min_sample_split**.
-- For **logistic regression classifier**, trying different value for the parameter **C** can help can avoid overfitting as well.
+- For **Gaussian Naive Bayes classifier**, **GridSearchCV** searches through different combination of applying scaling to **features** and selecting the **Select K Best** **n_components**.
+-Other classifiers ran into errors due to the limited size of the dataset, so I witheld from tuning them further.
+Below shows how they would have been tuned.
 
-1) For **K nearest neighbor classifier** the parameter n_neighbors and algorithm are tuned as such:
-```python
-k_range = list(range(1,11))
-algorithm_options = ['ball_tree','kd_tree','brute','auto']
-param_grid_knn = dict(n_neighbors=k_range, algorithm=algorithm_options)
 ```
-2) For **support vector classifier**, the parameter C, gamma and kernel are tuned as such:
+1) For **support vector classifier**, the parameter C, gamma and kernel are tuned as such:
 ```python
 param_grid_svc = [
   {'C': [1, 10, 50, 100, 150, 1000], 'kernel': ['linear','rbf']},
   {'C': [1, 10, 50, 100, 150, 1000], 'gamma': [0.1, 0.01, 0.001, 0.0001], 'kernel': ['linear','rbf']}]
 ```
-3) For **decision tree classifier**, the parameter criterion, min_samples_split, max_depth, min_samples_leaf, and max_leaf_nodes are tuned as such:
+2) For **decision tree classifier**, the parameter criterion, min_samples_split, max_depth, min_samples_leaf, and max_leaf_nodes are tuned as such:
 ```python
 param_grid_dt = {
     "criterion": ["gini", "entropy"],
@@ -182,12 +169,9 @@ param_grid_dt = {
     "max_leaf_nodes": [None, 5, 10, 20],
 }
 ```
-4) For **logistic regression classifier**, the parameter C is tuned as so:
-```python
-param_grid_l = {'C': [0.001, 0.01, 0.1, 1, 10, 100, 1000] }
-```
 
-After parameter tuning, there were slight gains in **decision tree classifier**, but due to dataset overfitting issues, the range couldnt be increased, as the amount of splits in the tuned parameters created errors. **K nearest neighbor classifier** tuning had some slight effects, but not increased desired recall results. 
+After parameter tuning, there were slight gains in **Naive Bayes classifier**, but these turned out to be overfitting issues which resulted in matching precision and recall scores.
+
 
 ## Question 5: 
 > What is validation, and what’s a classic mistake you can make if you do it wrong? How did you validate your analysis? [relevant rubric items: “discuss validation”, “validation strategy”]
@@ -221,12 +205,12 @@ To sum up the evaluation strategy:
 1. Algorithms with a precision_score and recall_score (and to a lesser degree, f1_score) greater than 0.3 are selected.
 1. The higher the recall is, the better the performance of the algorithm is.
 
-With the 3 best features selected, K Nearest Neighbors shows the best performance on average:
+With the 3 best features selected, **Adaboost Classifier** showed the best performance upon testing with tester.py:
 
-1. (Mean of) Accuracy = 0.836: 83.6% of the 146 data points are correctly predicted
-1. (Mean of) Precision: 0.695: Among the identified Persons of Interest, 69.5% are true POI. Nice!
-1. (Mean of) Fecall: 0.42: Among the 18 Persons of Interest, 42% are correctly identified.
-1. (Mean of) f1 score: 0.4961904761904762: The harmonic mean of precision and recall is 0.496.
+1. Accuracy = 0.789: 78.9% of the 146 data points are correctly predicted
+1. Precision: 0.538: Among the identified Persons of Interest, 53.8% are true POI.
+1. Recall: 0.37: Among the 18 Persons of Interest, 37% are correctly identified.
+1. f1 score: 0.438: The harmonic mean of precision and recall is 0.438.
 
 
 ## Sources
@@ -241,7 +225,7 @@ With the 3 best features selected, K Nearest Neighbors shows the best performanc
 - http://scikit-learn.org/stable/modules/generated/sklearn.svm.SVC.html
 - http://scikit-learn.org/stable/modules/generated/sklearn.model_selection.KFold.html
 - http://scikit-learn.org/stable/modules/generated/sklearn.tree.DecisionTreeClassifier.html
-- http://scikit-learn.org/stable/modules/generated/sklearn.linear_model.LogisticRegression.html
+- https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.AdaBoostClassifier.html
 - https://en.wikipedia.org/wiki/Hyperparameter_(machine_learning)
 
 
